@@ -48,32 +48,8 @@ async def create_note(note: CreateNoteDef) -> FullNoteDef:
 async def update_note(note_id: UUID, note: CreateNoteDef):
     assert note_id
     assert note
- 
-@app.delete(path="/note/{note_id}")
-async def delete_note(note_id: UUID):
-    try:
-        crud = Crud(get_prod_endinge())
-        crud.DeleteNote(note_id)
-        return {"message": f"Note with id {note_id} deleted successfully."}
-    except CrudElementNotFoundException as e:
-        raise HTTPException(status_code=404, detail=f"No Note with id: {e.missing_id}")
-    except Exception as e:
-        logger.error(e)
-        raise HTTPException(status_code=500, detail="Internal server error while deleting note.")
- 
- 
-@app.put(path="/note/{note_id}")
-async def update_note(note_id: UUID, payload: CreateNoteDef) -> FullNoteDef:
-    try:
-        crud = Crud(get_prod_endinge())
-        updated_note = crud.UpdateNote(
-            id=note_id,
-            note_text=payload.note,   # <-- hier geändert
-            tags=[t.tag for t in payload.tags] if payload.tags else None,
-        )
-        return updated_note
-    except CrudElementNotFoundException as e:
-        raise HTTPException(status_code=404, detail=f"No Note with id: {e.missing_id}")
-    except Exception as e:
-        logger.error("Error updating note: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error while updating note.")
+
+
+@app.get(path="/bogus")
+async def get_bogus():
+    return {"bogus": "foobard"}
