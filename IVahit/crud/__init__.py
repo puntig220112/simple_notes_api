@@ -1,52 +1,52 @@
 from uuid import UUID
-
+ 
 from pydantic import BaseModel
 from sqlalchemy import Engine, Select, select
 from sqlalchemy.orm import Session
-
+ 
 from IVahit.model._model import Note, Tag
 from IVahit.mylog import getLogger
-
+ 
 logger = getLogger(__name__)
-
-
+ 
+ 
 class CreateTagDef(BaseModel):
     tag: str
-
-
+ 
+ 
 class FullTagDef(CreateTagDef):
     id: UUID
     note_id: UUID
-
-
+ 
+ 
 class BaseNoteDef(BaseModel):
     note: str
-
-
+ 
+ 
 class CreateNoteDef(BaseNoteDef):
     note: str
     tags: list[CreateTagDef]
-
-
+ 
+ 
 class FullNoteDef(BaseNoteDef):
     id: UUID
     tags: list[FullTagDef]
-
-
+ 
+ 
 class CrudElementNotFoundException(Exception):
     def __init__(self, missing_id: UUID):
         super().__init__(f"No element with id {missing_id}")
         self._missing_id: UUID = missing_id
-
+ 
     @property
     def missing_id(self):
         return self._missing_id
-
-
+ 
+ 
 class Crud:
     def __init__(self, engine: Engine):
         self._engine: Engine = engine
-
+ 
     def ReadNote(self, id: None | UUID = None):
         logger.debug("ReadNote: Start")
         with Session(self._engine) as session:
@@ -78,9 +78,9 @@ class Crud:
             if id and not notes:
                 raise CrudElementNotFoundException(id)
             logger.debug("ReadNote: Converted notes %s", notes)
-
+ 
             return notes
-
+ 
     def CreateNote(self, note: str, tags: list[str] | None = None):
         logger.debug("Create a note")
         with Session(self._engine) as session:
@@ -106,4 +106,63 @@ class Crud:
                         note_element.tags,
                     )
                 ),
+               
             )
+    def DeleteNote(self, id: UUID):
+        logger.debug("DeleteNote: Start")
+        with Session(self._engine) as session:
+            logger.debug("DeleteNote: Session started")
+ 
+            # Versuche, die Note zu laden
+            note = session.get(Note, id)
+            if not note:
+                logger.warning("DeleteNote: No element with id %s", id)
+                raise CrudElementNotFoundException(id)
+ 
+            # Lösche abhängige Tags zuerst (falls Cascading nicht konfiguriert ist)
+            logger.debug("DeleteNote: Deleting tags for note %s", id)
+            for tag in note.tags:
+                session.delete(tag)
+ 
+            # Jetzt die Note selbst löschen
+            logger.debug("DeleteNote: Deleting note %s", id)
+            session.delete(note)
+ 
+            # Commit ausführen
+            session.commit()
+            logger.debug("DeleteNote: Successfully deleted note %s", id)
+ 
+            return {"message": f"Note with id {id} deleted successfully."}
+ 
+    def UpdateNote(self, id: UUID, note_text: str | None = None, tags: list[str] | None = None):
+        logger.debug("UpdateNote: Start")
+        with Session(self._engine) as session:
+            logger.debug("UpdateNote: Session started")
+            note = session.get(Note, id)
+            if not note:
+                logger.warning("UpdateNote: No element with id %s", id)
+                raise CrudElementNotFoundException(id)
+ 
+        # Text aktualisieren
+        if note_text is not None:
+            note.note = note_text
+ 
+        # Tags ersetzen
+        if tags is not None:
+            for old_tag in list(note.tags):
+                session.delete(old_tag)
+            for t in tags:
+                new_tag = Tag(tag=t, note=note)
+                session.add(new_tag)
+ 
+        session.commit()
+        logger.debug("UpdateNote: Successfully updated note %s", id)
+ 
+        return FullNoteDef(
+            id=note.id,
+            note=note.note,
+            tags=[
+                FullTagDef(id=t.id, note_id=t.note_id, tag=t.tag)
+                for t in note.tags
+            ],
+        )
